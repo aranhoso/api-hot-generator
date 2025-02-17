@@ -1,10 +1,14 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional, Dict
 import re
+from image_generator import ImageGenerator
+from dotenv import load_dotenv
+import os
 
 
 class GenerationRequest(BaseModel):
@@ -15,11 +19,30 @@ class GenerationRequest(BaseModel):
 
 class GenerationResponse(BaseModel):
     prompt: str
+    image: str | None = None
+    car_details: Dict[str, str] | None = None
 
 
 app = FastAPI(title="HotWheels Model API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 model_path = "model_complete.pt"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+load_dotenv()
+
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+if not GOOGLE_API_KEY:
+    raise ValueError("GOOGLE_API_KEY not found in environment variables")
+    
+image_generator = ImageGenerator(GOOGLE_API_KEY)
 
 
 class HotWheelsLanguageModel(nn.Module):
@@ -226,7 +249,12 @@ async def generate_car(request: GenerationRequest):
         image_prompt = create_image_prompt(car_info)
 
         if image_prompt:
-            return GenerationResponse(prompt=image_prompt)
+            generated_image = image_generator.generate_image(image_prompt)
+            return GenerationResponse(
+                prompt=image_prompt,
+                image=generated_image,
+                car_details=car_info
+            )
 
         attempts += 1
 
@@ -234,4 +262,3 @@ async def generate_car(request: GenerationRequest):
         status_code=500,
         detail="Não foi possível gerar um prompt válido após várias tentativas",
     )
-    
