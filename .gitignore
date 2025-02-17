@@ -11,9 +11,5 @@ ENV/
 *.swp
 *.swo
 
-# Modelo
-*.pt
-*.pth
-
 # Logs
 *.log
